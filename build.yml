@@ -1,0 +1,35 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Package script with PyInstaller
+        run: |
+          pyinstaller --onefile Automate_Data_Updates.py
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: automate_data_updates_exe
+          path: dist/Automate_Data_Updates.exe
+

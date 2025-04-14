@@ -1,0 +1,5 @@
+pybaseball
+pandas
+openpyxl
+bs4
+
