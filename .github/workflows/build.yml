@@ -2,15 +2,16 @@ name: Build Windows EXE
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  build-exe:
+  build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -23,13 +24,13 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Package script with PyInstaller
+      - name: Build EXE
         run: |
           pyinstaller --onefile Automate_Data_Updates.py
 
-      - name: Upload executable
-        uses: actions/upload-artifact@v3
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v2
         with:
-          name: automate_data_updates_exe
+          name: Automate_Data_Updates.exe
           path: dist/Automate_Data_Updates.exe
 
