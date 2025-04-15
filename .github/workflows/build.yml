@@ -29,7 +29,7 @@ jobs:
           pyinstaller --onefile Automate_Data_Updates.py
       - name: Check if executable exists
 	run: |
-	   if [ -f "./dist/your_script.exe" ]; then echo "Executable exists"; else echo "Executable not found"; fi
+	   if [ -f "./dist/Automate_Data_Updates.exe" ]; then echo "Executable exists"; else echo "Executable not found"; fi
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v2
