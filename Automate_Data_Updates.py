@@ -1,33 +1,34 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[27]:
+# In[30]:
 
 
 import pandas as pd
 import pybaseball as pyb
 import numpy as np
-
+import json
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import load_workbook
 import pandas as pd
+from tqdm import tqdm
 
 
-# In[28]:
+# In[8]:
 
 
 #input the excel file path that you wish to update
 excel_file_path = 'MLB Algorithm_2025 Season.xlsx'
-print("Reading:",excel_file_path)
+
 
 # ### Read in the injury report, parse it, then add it to the excel sheet
 
-# In[29]:
-step = 'Fangraphs Injury Report'
+# In[9]:
+
 
 ''' Read in fangraphs injury report '''
-print('Reading in  %s',step)
+
 # URL of the injury report for the 2023 season
 url = 'https://www.fangraphs.com/roster-resource/injury-report?timeframe=all&season=2025'
 
@@ -39,13 +40,9 @@ response = requests.get(url)
 soup = BeautifulSoup(response.text, 'html.parser')
 
 
-# In[30]:
+# In[ ]:
 
 
-import requests
-from bs4 import BeautifulSoup
-import json
-from tqdm import tqdm
 
 # Step 1: Load page
 url = 'https://www.fangraphs.com/roster-resource/injury-report?timeframe=all&season=2025'
@@ -91,16 +88,13 @@ file_path = excel_file_path
 with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:            
     df.to_excel(writer, sheet_name="Injury", index=False, header=False)        
 
-print("Wrote %s",step)
 
 # ### Read in the daily lineup for rotowire, parse it, add to the excel sheet
 
-# In[31]:
-
-step = 'Fangraphs Injury Report'
+# In[5]:
 
 
-print("Reading in %s",step)
+
 url = "https://www.rotowire.com/baseball/daily-lineups.php"
 soup = BeautifulSoup(requests.get(url).content, "html.parser")
 
@@ -137,7 +131,7 @@ df_pitching = pd.DataFrame(data_pitiching)
 df_batter = pd.DataFrame(data_batter)
 
 
-# In[32]:
+# In[6]:
 
 
 mlb_teams = {
@@ -174,7 +168,7 @@ mlb_teams = {
 }
 
 
-# In[33]:
+# In[7]:
 
 
 combined = df_pitching.merge(df_batter,on=['team','date'],suffixes=("","_x"))
@@ -182,7 +176,7 @@ combined = combined[combined.columns.drop(list(combined.filter(regex='_x')))]
 combined['team_short'] = combined['team'].apply(lambda x:mlb_teams[x])
 
 
-# In[34]:
+# In[8]:
 
 
 # Now need to make it in the order that it is in the excel sheet
@@ -206,30 +200,17 @@ for index, row in combined.iterrows():
     ws[f'R{index + 2}'] = row['batting_order']
 
 wb.save(file_path)
-print("Wrote  %s",step)
 
 
 # ### Update the table with Streamers Data (projected Rest of Season) + pybaseball's fangraphs dataset 
 
 # ### Pull in the streamers data and the fangraphs data 
 
-# In[35]:
-
-
-import requests
-from bs4 import BeautifulSoup
-import json
-from tqdm import tqdm
-import pandas as pd
-import pybaseball as pyb
-
-
 # ##### Getting Batting Data
 
-# In[ ]:
+# In[29]:
 
-step = 'Batter Stats'
-print("Reading in %s",step)
+
 # Step 1: Load page
 url = 'https://www.fangraphs.com/projections?pos=all&stats=bat&type=steameru'
 response = requests.get(url)
@@ -278,7 +259,8 @@ if streamers:
             'OBP': player.get('OBP', 'NA'),
             'SLG': player.get('SLG', 'NA'),
             'OPS': player.get('OPS', 'NA'),
-            'Year': player.get('Year', 2025)   # does not exist in sample
+            'Year': player.get('Year', 2025),   # does not exist in sample
+            'MLB_ID': player.get('xMLBAMID', 'NA')
         })
         
 else:
@@ -288,7 +270,10 @@ df = pd.DataFrame(res)
 df.to_csv("Fangraphs_Streamers_Data.csv")
 
 df_batter = pyb.batting_stats(2025,qual=1)
-df_batter = df_batter[['Name','Team','Pos','Age','G','AB','R','H','2B','3B','HR','RBI','SB','CS','BB','SO','SH','SF','HBP','AVG','OBP','SLG','OPS','Season']]
+id_lookup = pyb.playerid_reverse_lookup([i for i in df_batter.IDfg.tolist()],key_type = 'fangraphs') # Lookup the mlb id
+df_batter['MLB_ID'] = id_lookup['key_mlbam']
+
+df_batter = df_batter[['Name','Team','Pos','Age','G','AB','R','H','2B','3B','HR','RBI','SB','CS','BB','SO','SH','SF','HBP','AVG','OBP','SLG','OPS','Season','MLB_ID']]
 df_batter = df_batter.rename(columns={'Name':"Player","Season":'Year'})
 
 
@@ -298,10 +283,10 @@ def combine_streamers_and_season_data(streamers_df, season_df):
     
     # Iterate through each row in the season stats
     for _, season_row in season_df.iterrows():
-        player_name = season_row['Player']
+        player_id = season_row['MLB_ID']
         
         # Find matching player in streamers data
-        matching_streamer = streamers_df[streamers_df['Player'] == player_name]
+        matching_streamer = streamers_df[streamers_df['MLB_ID'] == player_id]
         
         if not matching_streamer.empty:
             streamer_row = matching_streamer.iloc[0]
@@ -309,7 +294,7 @@ def combine_streamers_and_season_data(streamers_df, season_df):
             # Combine rows using your combine logic
             combined = season_row.copy()
             for col in season_row.index:
-                if col in streamer_row.index and col not in ['Player', 'Team', 'Pos', 'Age', 'Year']:
+                if col in streamer_row.index and col not in ['Player', 'Team', 'Pos', 'Age', 'Year','MLB_ID']:
                     try:
                         combined[col] += streamer_row[col]
                     except:
@@ -370,18 +355,17 @@ for index, row in combined_data.iterrows():
     ws[f'Z{row_num}'] = row['SLG']
     ws[f'AA{row_num}'] = row['OPS']
     ws[f'AB{row_num}'] = row['Year']
+    ws[f'AC{row_num}'] = row['MLB_ID']
+
 
 wb.save(file_path)
-
-print("Wrote %s", step)
 
 
 # ##### Getting Piching Data
 
-# In[ ]:
+# In[20]:
 
-step = 'Pitching Stats'
-print("Reading %s", step)
+
 
 # Step 1: Load page
 url = 'https://www.fangraphs.com/projections?type=steameru&stats=pit&pos=&team=0&players=0&lg=all&z=1744628169&sortcol=&sortdir=desc&pageitems=30&statgroup=dashboard&fantasypreset=dashboard'
@@ -429,6 +413,7 @@ if streamers:
             'ERA': player.get('ERA', 'NA'),
             'WHIP': player.get('WHIP', 'NA'),
             'Year': 2025,
+            'MLB_ID':player.get('xMLBAMID','NA'),
             'IP per GS': player.get('IP', 0) / player.get('GS', 1) if player.get('GS', 1) != 0 else 0
     })
         
@@ -439,8 +424,11 @@ df = pd.DataFrame(res)
 df.to_csv("Fangraphs_Streamers_Data.csv")
 
 df_pitcher = pyb.pitching_stats(2025, qual=1)
-df_pitcher = df_pitcher[['Name','Team','Age','G','GS','CG','ShO','IP','H','ER','SO','BB','HR','W','L','SV','BS','HLD','ERA','WHIP','Season']]
-df_pitcher['IP per GS'] = df_pitcher['IP'] / df_pitcher['GS'].replace(0, pd.NA)
+id_lookup = pyb.playerid_reverse_lookup([i for i in df_pitcher.IDfg.tolist()],key_type = 'fangraphs') # Lookup the mlb id
+df_pitcher['MLB_ID'] = id_lookup['key_mlbam']
+
+df_pitcher = df_pitcher[['Name','Team','Age','G','GS','CG','ShO','IP','H','ER','SO','BB','HR','W','L','SV','BS','HLD','ERA','WHIP','Season','MLB_ID']]
+df_pitcher['IP per GS'] = df_pitcher['IP'] / df_pitcher['GS'].replace(0, 0)
 df_pitcher = df_pitcher.rename(columns={'Name':"Player","Season":'Year'})
 
 
@@ -449,22 +437,22 @@ def combine_pitcher_data(streamers_df, season_df):
     combined_rows = []
 
     for idx, season_row in season_df.iterrows():
-        player_name = season_row['Player']
-        match = streamers_df[streamers_df['Player'] == player_name]
+        player_id = season_row['MLB_ID']
+        match = streamers_df[streamers_df['MLB_ID'] == player_id]
 
         if not match.empty:
             stream_row = match.iloc[0]
             combined = season_row.copy()
 
             for col in season_row.index:
-                if col in stream_row.index and col not in ['Player', 'Team', 'Age', 'Year', 'IP per GS']:
+                if col in stream_row.index and col not in ['Player', 'Team', 'Age', 'Year', 'IP per GS','MLB_ID']:
                     try:
                         combined[col] += stream_row[col]
                     except:
                         combined[col] = 'NA'
 
             # Recalculate derived stat
-            combined['IP per GS'] = combined['IP'] / combined['GS'] if combined['GS'] else 0
+            combined['IP per GS'] = combined['IP'] / combined['GS'] if combined['GS'] != 0 else 0
             combined['ERA'] = (combined['ER'] / combined['IP']) * 9
             combined['WHIP'] = (combined['BB'] + combined['H']) / combined['IP']
 
@@ -511,11 +499,12 @@ for index, row in combined.iterrows():
     ws[f'U{row_num}'] = row['WHIP']
     ws[f'V{row_num}'] = row['Year']
     ws[f'W{row_num}'] = row['IP per GS']
+    ws[f'X{row_num}'] = row['MLB_ID']
 
 wb.save(file_path)       
 
 
-# In[43]:
+# In[ ]:
 
 
 
@@ -554,13 +543,17 @@ for index, row in combined.iterrows():
     ws[f'V{row_num}'] = row['Year']
     ws[f'W{row_num}'] = row['IP per GS']
 
-wb.save(file_path)   
-  
-print("Wrote %s", step)
+wb.save(file_path)     
+
+
+# In[14]:
+
+
+pyb.pitching_stats(2025,qual=1).shape
 
 
 # In[ ]:
 
 
-
+combined.shape
 
