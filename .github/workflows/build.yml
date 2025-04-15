@@ -40,7 +40,7 @@ jobs:
 
       # Step 6: Upload EXE file as an artifact (use actions/upload-artifact@v3)
       - name: Upload EXE artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact
         with:
           name: Automate_Data_Updates.exe
           path: dist/Automate_Data_Updates.exe
