@@ -1,0 +1,23 @@
+# Ignore Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Ignore build folders and generated executables
+/dist/
+
+# Ignore virtual environment folders
+venv/
+env/
+
+# Ignore IDE configuration files (optional)
+.vscode/
+.idea/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore any other files that should not be versioned
+*.log
+
