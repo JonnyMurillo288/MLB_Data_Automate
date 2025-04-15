@@ -24,20 +24,24 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Verify PyInstaller Installation
+        run: |
+          pyinstaller --version  # Verify PyInstaller is installed correctly
+
       - name: Build EXE
         run: |
-          pyinstaller --onefile Automate_Data_Updates.py
+          echo "Starting PyInstaller build..."
+          pyinstaller --onefile Automate_Data_Updates.py > build.log 2>&1 || (echo "Build failed" && cat build.log)
+          echo "Build complete"
+          cat build.log  # Display the log in the GitHub Actions output
 
-      - name: Check if executable exists
+      - name: List contents of dist folder
         run: |
-          if exist ".\dist\Automate_Data_Updates.exe" (
-            echo "Executable exists"
-          ) else (
-            echo "Executable not found"
-          )
+          echo "Checking contents of dist folder:"
+          dir dist/
 
       - name: Upload EXE artifact
-        uses: actions/upload-artifact@v3.1.2
+        uses: actions/upload-artifact@v2
         with:
           name: Automate_Data_Updates.exe
           path: dist/Automate_Data_Updates.exe
