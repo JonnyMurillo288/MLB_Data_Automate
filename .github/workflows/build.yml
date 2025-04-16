@@ -30,7 +30,7 @@ jobs:
       # Step 4: Build the EXE using PyInstaller
       - name: Build EXE
         run: |
-          pyinstaller --onefile --collect-all Automate_Data_Updates.py
+          pyinstaller --onefile --collect-all pybaseball Automate_Data_Updates.py
 
       # Step 5: Check contents of dist folder
       - name: List contents of dist folder
