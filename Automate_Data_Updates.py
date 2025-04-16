@@ -3,6 +3,20 @@
 
 # In[30]:
 
+import os
+import tempfile
+
+# Use a temp folder near the exe
+local_temp = os.path.join(os.getcwd(), "temp_pybaseball")
+
+# Create it if it doesn't exist
+os.makedirs(local_temp, exist_ok=True)
+
+# Override pybaseball's cache location
+os.environ["PYBASEBALL_CACHE_DIR"] = local_temp
+
+tempfile.tempdir = local_temp
+
 
 import pandas as pd
 import pybaseball as pyb
