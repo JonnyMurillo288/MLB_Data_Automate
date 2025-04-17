@@ -1,21 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[30]:
-
-import os
-import tempfile
-
-# Use a temp folder near the exe
-local_temp = os.path.join(os.getcwd(), "temp_pybaseball")
-
-# Create it if it doesn't exist
-os.makedirs(local_temp, exist_ok=True)
-
-# Override pybaseball's cache location
-os.environ["PYBASEBALL_CACHE_DIR"] = local_temp
-
-tempfile.tempdir = local_temp
+# In[1]:
 
 
 import pandas as pd
@@ -55,7 +41,6 @@ soup = BeautifulSoup(response.text, 'html.parser')
 
 
 # In[ ]:
-
 
 
 # Step 1: Load page
@@ -103,10 +88,10 @@ with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='ove
     df.to_excel(writer, sheet_name="Injury", index=False, header=False)        
 
 
+
 # ### Read in the daily lineup for rotowire, parse it, add to the excel sheet
 
-# In[5]:
-
+# In[37]:
 
 
 url = "https://www.rotowire.com/baseball/daily-lineups.php"
@@ -145,7 +130,13 @@ df_pitching = pd.DataFrame(data_pitiching)
 df_batter = pd.DataFrame(data_batter)
 
 
-# In[6]:
+# In[ ]:
+
+
+
+
+
+# In[ ]:
 
 
 mlb_teams = {
@@ -159,7 +150,7 @@ mlb_teams = {
     "Yankees": "NYY",
     "Angels": "LAA",
     "Braves": "ATL",
-    "Nationals": "WSH",
+    "Nationals": "WSN",
     "Cardinals": "STL",
     "Phillies": "PHI",
     "Pirates": "PIT",
@@ -190,7 +181,7 @@ combined = combined[combined.columns.drop(list(combined.filter(regex='_x')))]
 combined['team_short'] = combined['team'].apply(lambda x:mlb_teams[x])
 
 
-# In[8]:
+# In[ ]:
 
 
 # Now need to make it in the order that it is in the excel sheet
@@ -216,13 +207,14 @@ for index, row in combined.iterrows():
 wb.save(file_path)
 
 
+
 # ### Update the table with Streamers Data (projected Rest of Season) + pybaseball's fangraphs dataset 
 
 # ### Pull in the streamers data and the fangraphs data 
 
 # ##### Getting Batting Data
 
-# In[29]:
+# In[74]:
 
 
 # Step 1: Load page
@@ -283,14 +275,33 @@ else:
 df = pd.DataFrame(res)
 df.to_csv("Fangraphs_Streamers_Data.csv")
 
-df_batter = pyb.batting_stats(2025,qual=1)
-id_lookup = pyb.playerid_reverse_lookup([i for i in df_batter.IDfg.tolist()],key_type = 'fangraphs') # Lookup the mlb id
-df_batter['MLB_ID'] = id_lookup['key_mlbam']
+# Get 2025 batter stats from FanGraphs
+df_batter = pyb.batting_stats(2025, qual=1)
 
-df_batter = df_batter[['Name','Team','Pos','Age','G','AB','R','H','2B','3B','HR','RBI','SB','CS','BB','SO','SH','SF','HBP','AVG','OBP','SLG','OPS','Season','MLB_ID']]
-df_batter = df_batter.rename(columns={'Name':"Player","Season":'Year'})
+# Get FanGraphs ID list and perform reverse lookup
+ids = df_batter['IDfg'].tolist()
+id_lookup = pyb.playerid_reverse_lookup(ids, key_type='fangraphs')
 
+# Drop duplicate FGIDs to ensure clean merge (one-to-one)
+id_lookup = id_lookup.drop_duplicates(subset='key_fangraphs')
 
+# Merge to match FGID with MLB ID, keeping only rows with valid matches
+df_batter = df_batter.merge(
+    id_lookup[['key_fangraphs', 'key_mlbam']],
+    left_on='IDfg',
+    right_on='key_fangraphs',
+    how='inner'  # Drop if no match
+)
+
+# Rename and clean up columns
+df_batter = df_batter.rename(columns={
+    'key_mlbam': 'MLB_ID',
+    'Name': 'Player',
+    'Season': 'Year'
+})
+
+# Select final columns
+df_batter = df_batter[['Player','Team','Pos','Age','G','AB','R','H','2B','3B','HR','RBI','SB','CS','BB','SO','SH','SF','HBP','AVG','OBP','SLG','OPS','Year','MLB_ID']]
 # Need to do a function that gets the row of the streamers data for a given player, add their matching stats 
 def combine_streamers_and_season_data(streamers_df, season_df):
     combined_rows = []
@@ -327,13 +338,17 @@ def combine_streamers_and_season_data(streamers_df, season_df):
             combined_rows.append(combined)
         else:
             # No matching streamer data, keep season data only
-            combined_rows.append(season_row)
+            combined_rows.append(streamer_row)
     
     # Create combined DataFrame
     return pd.DataFrame(combined_rows)
 
 # Usage:
 combined_data = combine_streamers_and_season_data(df, df_batter)
+suffix_pattern = r'\s+(Jr\.|Sr\.|II|III|IV|V)$'
+
+# Remove suffixes from the 'Player' column
+combined_data['Player'] = combined_data['Player'].str.replace(suffix_pattern, '', regex=True)
 
 
 file_path = excel_file_path
@@ -375,10 +390,10 @@ for index, row in combined_data.iterrows():
 wb.save(file_path)
 
 
+
 # ##### Getting Piching Data
 
-# In[20]:
-
+# In[76]:
 
 
 # Step 1: Load page
@@ -437,15 +452,36 @@ else:
 df = pd.DataFrame(res)
 df.to_csv("Fangraphs_Streamers_Data.csv")
 
+# Get 2025 pitching stats
 df_pitcher = pyb.pitching_stats(2025, qual=1)
-id_lookup = pyb.playerid_reverse_lookup([i for i in df_pitcher.IDfg.tolist()],key_type = 'fangraphs') # Lookup the mlb id
-df_pitcher['MLB_ID'] = id_lookup['key_mlbam']
 
-df_pitcher = df_pitcher[['Name','Team','Age','G','GS','CG','ShO','IP','H','ER','SO','BB','HR','W','L','SV','BS','HLD','ERA','WHIP','Season','MLB_ID']]
-df_pitcher['IP per GS'] = df_pitcher['IP'] / df_pitcher['GS'].replace(0, 0)
-df_pitcher = df_pitcher.rename(columns={'Name':"Player","Season":'Year'})
+# Convert FanGraphs IDs to string and perform reverse lookup
+ids = df_pitcher['IDfg'].tolist()
+id_lookup = pyb.playerid_reverse_lookup(ids, key_type='fangraphs')
 
+# Drop duplicates to ensure clean merge
+id_lookup = id_lookup.drop_duplicates(subset='key_fangraphs')
 
+# Merge pitcher stats with MLB_ID from lookup, keeping only matched rows
+df_pitcher = df_pitcher.merge(
+    id_lookup[['key_fangraphs', 'key_mlbam']],
+    left_on='IDfg',
+    right_on='key_fangraphs',
+    how='inner'  # Drops unmatched IDs
+)
+
+# Rename columns and add calculated field
+df_pitcher = df_pitcher.rename(columns={
+    'key_mlbam': 'MLB_ID',
+    'Name': 'Player',
+    'Season': 'Year'
+})
+
+# Safely compute IP per GS
+df_pitcher['IP per GS'] = df_pitcher['IP'] / df_pitcher['GS'].replace(0, pd.NA)
+
+# Reorder/keep selected columns
+df_pitcher = df_pitcher[['Player','Team','Age','G','GS','CG','ShO','IP','H','ER','SO','BB','HR','W','L','SV','BS','HLD','ERA','WHIP','Year','MLB_ID','IP per GS']]
 # Need to do a function that gets the row of the streamers data for a given player, add their matching stats 
 def combine_pitcher_data(streamers_df, season_df):
     combined_rows = []
@@ -472,12 +508,16 @@ def combine_pitcher_data(streamers_df, season_df):
 
             combined_rows.append(combined)
         else:
-            combined_rows.append(season_row)
+            combined_rows.append(stream_row)
 
     return pd.DataFrame(combined_rows)
 
 # Usage:
 combined = combine_pitcher_data(df, df_pitcher)
+suffix_pattern = r'\s+(Jr\.|Sr\.|II|III|IV|V)$'
+
+# Remove suffixes from the 'Player' column
+combined['Player'] = combined['Player'].str.replace(suffix_pattern, '', regex=True)
 
 
 file_path = excel_file_path
@@ -519,8 +559,6 @@ wb.save(file_path)
 
 
 # In[ ]:
-
-
 
 
 file_path = excel_file_path
